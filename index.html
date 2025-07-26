@@ -1,919 +1,944 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Shuffle, Copy, Download, Palette, RefreshCw, Lock, Unlock, Eye, Heart, Share2, Zap, Sparkles, Moon, Sun, Settings, Info, ChevronDown, Star, Bookmark, Image, Code, Wand2 } from 'lucide-react';
-
-const ColorPaletteGenerator = () => {
-  const [currentPalette, setCurrentPalette] = useState([]);
-  const [paletteType, setPaletteType] = useState('complementary');
-  const [baseColor, setBaseColor] = useState('#6366F1');
-  const [copiedColor, setCopiedColor] = useState('');
-  const [lockedColors, setLockedColors] = useState(new Set());
-  const [savedPalettes, setSavedPalettes] = useState([]);
-  const [darkMode, setDarkMode] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [colorFormat, setColorFormat] = useState('hex');
-  const [animationSpeed, setAnimationSpeed] = useState('normal');
-  const [showColorInfo, setShowColorInfo] = useState(false);
-  const [currentColorInfo, setCurrentColorInfo] = useState(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [paletteHistory, setPaletteHistory] = useState([]);
-  const [previewMode, setPreviewMode] = useState('web');
-  const [accessibility, setAccessibility] = useState({ contrast: true, colorBlind: false });
-  const intervalRef = useRef(null);
-
-  // Advanced color conversion functions
-  const hexToHsl = (hex) => {
-    const r = parseInt(hex.slice(1, 3), 16) / 255;
-    const g = parseInt(hex.slice(3, 5), 16) / 255;
-    const b = parseInt(hex.slice(5, 7), 16) / 255;
-
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    let h, s, l = (max + min) / 2;
-
-    if (max === min) {
-      h = s = 0;
-    } else {
-      const d = max - min;
-      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-      switch (max) {
-        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-        case g: h = (b - r) / d + 2; break;
-        case b: h = (r - g) / d + 4; break;
-      }
-      h /= 6;
-    }
-
-    return [h * 360, s * 100, l * 100];
-  };
-
-  const hslToHex = (h, s, l) => {
-    h /= 360;
-    s /= 100;
-    l /= 100;
-
-    const hue2rgb = (p, q, t) => {
-      if (t < 0) t += 1;
-      if (t > 1) t -= 1;
-      if (t < 1/6) return p + (q - p) * 6 * t;
-      if (t < 1/2) return q;
-      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-      return p;
-    };
-
-    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-    const p = 2 * l - q;
-    const r = hue2rgb(p, q, h + 1/3);
-    const g = hue2rgb(p, q, h);
-    const b = hue2rgb(p, q, h - 1/3);
-
-    const toHex = (c) => {
-      const hex = Math.round(c * 255).toString(16);
-      return hex.length === 1 ? '0' + hex : hex;
-    };
-
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-  };
-
-  const hexToRgb = (hex) => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return [r, g, b];
-  };
-
-  const getContrastRatio = (color1, color2) => {
-    const getLuminance = (hex) => {
-      const [r, g, b] = hexToRgb(hex).map(c => {
-        c = c / 255;
-        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-      });
-      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    };
-
-    const l1 = getLuminance(color1);
-    const l2 = getLuminance(color2);
-    return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
-  };
-
-  const formatColor = (hex) => {
-    switch (colorFormat) {
-      case 'rgb':
-        const [r, g, b] = hexToRgb(hex);
-        return `rgb(${r}, ${g}, ${b})`;
-      case 'hsl':
-        const [h, s, l] = hexToHsl(hex);
-        return `hsl(${Math.round(h)}, ${Math.round(s)}%, ${Math.round(l)}%)`;
-      default:
-        return hex.toUpperCase();
-    }
-  };
-
-  // Advanced palette generation with AI-inspired algorithms
-  const generateAdvancedPalette = (type, base, locked = new Set()) => {
-    const [h, s, l] = hexToHsl(base);
-    const colors = [];
-    const goldenRatio = 1.618;
-    const fibonacci = [1, 1, 2, 3, 5, 8, 13, 21];
-
-    switch (type) {
-      case 'complementary':
-        colors.push(base);
-        colors.push(hslToHex((h + 180) % 360, Math.max(20, s - 10), Math.min(85, l + 5)));
-        colors.push(hslToHex(h, Math.max(15, s - 25), Math.min(90, l + 25)));
-        colors.push(hslToHex((h + 180) % 360, Math.max(15, s - 25), Math.min(90, l + 25)));
-        colors.push(hslToHex(h, Math.max(10, s - 40), Math.max(15, l - 35)));
-        break;
-
-      case 'analogous':
-        const analogousShift = 25;
-        colors.push(hslToHex((h - analogousShift * 2 + 360) % 360, Math.max(20, s - 5), Math.min(80, l + 10)));
-        colors.push(hslToHex((h - analogousShift + 360) % 360, s, l));
-        colors.push(base);
-        colors.push(hslToHex((h + analogousShift) % 360, s, l));
-        colors.push(hslToHex((h + analogousShift * 2) % 360, Math.max(20, s - 5), Math.min(80, l + 10)));
-        break;
-
-      case 'triadic':
-        colors.push(base);
-        colors.push(hslToHex((h + 120) % 360, Math.max(25, s - 10), Math.min(85, l + 5)));
-        colors.push(hslToHex((h + 240) % 360, Math.max(25, s - 10), Math.min(85, l + 5)));
-        colors.push(hslToHex(h, Math.max(15, s - 30), Math.min(90, l + 20)));
-        colors.push(hslToHex(h, Math.max(10, s - 15), Math.max(20, l - 25)));
-        break;
-
-      case 'monochromatic':
-        const baseLightness = l;
-        colors.push(hslToHex(h, Math.max(20, s - 5), Math.min(95, baseLightness + 35)));
-        colors.push(hslToHex(h, Math.max(15, s - 10), Math.min(90, baseLightness + 20)));
-        colors.push(base);
-        colors.push(hslToHex(h, Math.min(100, s + 5), Math.max(20, baseLightness - 20)));
-        colors.push(hslToHex(h, Math.min(100, s + 10), Math.max(15, baseLightness - 35)));
-        break;
-
-      case 'tetradic':
-        colors.push(base);
-        colors.push(hslToHex((h + 90) % 360, Math.max(25, s - 5), Math.min(85, l + 5)));
-        colors.push(hslToHex((h + 180) % 360, Math.max(25, s - 5), Math.min(85, l + 5)));
-        colors.push(hslToHex((h + 270) % 360, Math.max(25, s - 5), Math.min(85, l + 5)));
-        colors.push(hslToHex(h, Math.max(10, s - 25), Math.max(25, l - 15)));
-        break;
-
-      case 'golden':
-        const goldenAngle = 137.5;
-        colors.push(base);
-        for (let i = 1; i < 5; i++) {
-          const newHue = (h + goldenAngle * i) % 360;
-          const newSat = Math.max(20, s - (i * 8));
-          const newLight = Math.max(20, Math.min(85, l + (i % 2 === 0 ? 15 : -15)));
-          colors.push(hslToHex(newHue, newSat, newLight));
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProColor Studio - Professional Color Palette Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .animate-gradient {
+            background-size: 200% 200%;
+            animation: gradient 8s ease infinite;
         }
-        break;
+        
+        @keyframes gradient {
+            0%, 100% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+        }
+        
+        .glassmorphism {
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        
+        .color-card {
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .color-card:hover {
+            transform: scale(1.1) rotate(2deg);
+            z-index: 10;
+        }
+        
+        .floating-dot {
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { 
+                transform: translateY(0px) rotate(0deg); 
+            }
+            33% { 
+                transform: translateY(-20px) rotate(120deg); 
+            }
+            66% { 
+                transform: translateY(10px) rotate(240deg); 
+            }
+        }
 
-      case 'fibonacci':
-        colors.push(base);
-        fibonacci.slice(0, 4).forEach((fib, i) => {
-          const hueShift = (fib * 15) % 360;
-          const newHue = (h + hueShift) % 360;
-          const newSat = Math.max(15, Math.min(100, s + (fib * 3) - 15));
-          const newLight = Math.max(15, Math.min(85, l + (i % 2 === 0 ? 10 : -10)));
-          colors.push(hslToHex(newHue, newSat, newLight));
-        });
-        break;
-
-      case 'nature':
-        // Earth tones and natural colors
-        const naturePalettes = [
-          [h, Math.max(30, s - 10), Math.min(75, l + 10)], // Base
-          [(h + 45) % 360, Math.max(40, s), Math.max(25, l - 20)], // Earth
-          [(h + 120) % 360, Math.max(50, s + 10), Math.min(70, l)], // Forest
-          [(h + 200) % 360, Math.max(35, s - 5), Math.min(80, l + 15)], // Sky
-          [(h + 30) % 360, Math.max(20, s - 15), Math.max(20, l - 25)] // Stone
-        ];
-        naturePalettes.forEach(([hue, sat, light]) => {
-          colors.push(hslToHex(hue, sat, light));
-        });
-        break;
-
-      case 'cyberpunk':
-        // Neon and high-tech colors
-        colors.push(hslToHex(h, Math.min(100, s + 20), Math.min(85, l + 10)));
-        colors.push(hslToHex((h + 180) % 360, Math.min(100, s + 30), Math.min(80, l + 5)));
-        colors.push(hslToHex(300, 85, 65)); // Neon purple
-        colors.push(hslToHex(180, 90, 70)); // Cyan
-        colors.push(hslToHex(h, Math.max(15, s - 30), Math.max(10, l - 40)));
-        break;
-
-      case 'pastel':
-        colors.push(hslToHex(h, Math.max(20, s - 40), Math.min(90, l + 25)));
-        colors.push(hslToHex((h + 60) % 360, Math.max(25, s - 35), Math.min(88, l + 20)));
-        colors.push(hslToHex((h + 120) % 360, Math.max(30, s - 30), Math.min(85, l + 15)));
-        colors.push(hslToHex((h + 180) % 360, Math.max(25, s - 35), Math.min(88, l + 20)));
-        colors.push(hslToHex((h + 240) % 360, Math.max(20, s - 40), Math.min(90, l + 25)));
-        break;
-
-      default:
-        colors.push(base);
-    }
-
-    // Apply locked colors
-    const result = [];
-    for (let i = 0; i < 5; i++) {
-      if (locked.has(i) && currentPalette[i]) {
-        result[i] = currentPalette[i];
-      } else {
-        result[i] = colors[i] || base;
-      }
-    }
-
-    return result;
-  };
-
-  const generateRandomColor = () => {
-    const hue = Math.floor(Math.random() * 360);
-    const saturation = Math.floor(Math.random() * 60) + 40; // 40-100%
-    const lightness = Math.floor(Math.random() * 40) + 30; // 30-70%
-    return hslToHex(hue, saturation, lightness);
-  };
-
-  const animatedGeneration = useCallback(() => {
-    setIsGenerating(true);
-    let count = 0;
-    const maxCount = animationSpeed === 'fast' ? 5 : animationSpeed === 'slow' ? 15 : 10;
-    
-    intervalRef.current = setInterval(() => {
-      if (count < maxCount) {
-        setCurrentPalette(generateAdvancedPalette(paletteType, generateRandomColor(), lockedColors));
-        count++;
-      } else {
-        clearInterval(intervalRef.current);
-        const finalPalette = generateAdvancedPalette(paletteType, baseColor, lockedColors);
-        setCurrentPalette(finalPalette);
-        setPaletteHistory(prev => [finalPalette, ...prev.slice(0, 9)]);
-        setIsGenerating(false);
-      }
-    }, animationSpeed === 'fast' ? 50 : animationSpeed === 'slow' ? 200 : 100);
-  }, [paletteType, baseColor, lockedColors, animationSpeed]);
-
-  const copyToClipboard = async (color) => {
-    try {
-      const formattedColor = formatColor(color);
-      await navigator.clipboard.writeText(formattedColor);
-      setCopiedColor(color);
-      setTimeout(() => setCopiedColor(''), 2000);
-    } catch (err) {
-      console.error('Failed to copy color:', err);
-    }
-  };
-
-  const toggleColorLock = (index) => {
-    const newLocked = new Set(lockedColors);
-    if (newLocked.has(index)) {
-      newLocked.delete(index);
-    } else {
-      newLocked.add(index);
-    }
-    setLockedColors(newLocked);
-  };
-
-  const savePalette = () => {
-    const newPalette = {
-      id: Date.now(),
-      colors: [...currentPalette],
-      type: paletteType,
-      baseColor,
-      timestamp: new Date().toISOString(),
-      name: `${paletteType} palette`
-    };
-    setSavedPalettes(prev => [newPalette, ...prev.slice(0, 19)]);
-  };
-
-  const exportPalette = (format = 'json') => {
-    const paletteData = {
-      type: paletteType,
-      baseColor,
-      colors: currentPalette.map(color => ({
-        hex: color,
-        rgb: formatColor(color).replace('rgb(', '').replace(')', ''),
-        hsl: (() => {
-          const [h, s, l] = hexToHsl(color);
-          return `${Math.round(h)}, ${Math.round(s)}%, ${Math.round(l)}%`;
-        })()
-      })),
-      accessibility: currentPalette.map(color => ({
-        color,
-        contrastWithWhite: getContrastRatio(color, '#FFFFFF').toFixed(2),
-        contrastWithBlack: getContrastRatio(color, '#000000').toFixed(2)
-      })),
-      timestamp: new Date().toISOString()
-    };
-    
-    let content, filename, mimeType;
-    
-    switch (format) {
-      case 'css':
-        content = `:root {\n${currentPalette.map((color, i) => `  --color-${i + 1}: ${color};`).join('\n')}\n}`;
-        filename = `palette-${paletteType}-${Date.now()}.css`;
-        mimeType = 'text/css';
-        break;
-      case 'scss':
-        content = currentPalette.map((color, i) => `$color-${i + 1}: ${color};`).join('\n');
-        filename = `palette-${paletteType}-${Date.now()}.scss`;
-        mimeType = 'text/scss';
-        break;
-      case 'ase':
-        // Adobe Swatch Exchange format (simplified)
-        content = currentPalette.map(color => `${color}\t${color.slice(1)}`).join('\n');
-        filename = `palette-${paletteType}-${Date.now()}.ase`;
-        mimeType = 'text/plain';
-        break;
-      default:
-        content = JSON.stringify(paletteData, null, 2);
-        filename = `palette-${paletteType}-${Date.now()}.json`;
-        mimeType = 'application/json';
-    }
-    
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const showColorDetails = (color, index) => {
-    const [h, s, l] = hexToHsl(color);
-    const [r, g, b] = hexToRgb(color);
-    setCurrentColorInfo({
-      hex: color,
-      rgb: [r, g, b],
-      hsl: [Math.round(h), Math.round(s), Math.round(l)],
-      index,
-      contrastWhite: getContrastRatio(color, '#FFFFFF').toFixed(2),
-      contrastBlack: getContrastRatio(color, '#000000').toFixed(2)
-    });
-    setShowColorInfo(true);
-  };
-
-  useEffect(() => {
-    setCurrentPalette(generateAdvancedPalette(paletteType, baseColor, lockedColors));
-  }, [paletteType, baseColor]);
-
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, []);
-
-  const paletteTypes = [
-    { value: 'complementary', label: 'Complementary', description: 'Opposite colors for maximum contrast', icon: '🎯' },
-    { value: 'analogous', label: 'Analogous', description: 'Neighboring colors for harmony', icon: '🌊' },
-    { value: 'triadic', label: 'Triadic', description: 'Three evenly spaced colors', icon: '🔺' },
-    { value: 'monochromatic', label: 'Monochromatic', description: 'Single hue with variations', icon: '🎭' },
-    { value: 'tetradic', label: 'Tetradic', description: 'Four colors in perfect balance', icon: '⬜' },
-    { value: 'golden', label: 'Golden Ratio', description: 'Mathematically perfect harmony', icon: '✨' },
-    { value: 'fibonacci', label: 'Fibonacci', description: 'Nature-inspired proportions', icon: '🌀' },
-    { value: 'nature', label: 'Nature', description: 'Earth tones and organic colors', icon: '🌿' },
-    { value: 'cyberpunk', label: 'Cyberpunk', description: 'Neon and high-tech vibes', icon: '🔮' },
-    { value: 'pastel', label: 'Pastel', description: 'Soft and delicate tones', icon: '🦄' }
-  ];
-
-  const previewModes = [
-    { value: 'web', label: 'Website', icon: '🌐' },
-    { value: 'mobile', label: 'Mobile App', icon: '📱' },
-    { value: 'print', label: 'Print Design', icon: '🖨️' },
-    { value: 'brand', label: 'Brand Identity', icon: '🏢' }
-  ];
-
-  return (
-    <div className={`min-h-screen transition-all duration-500 ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-indigo-50 via-white to-purple-50'}`}>
-      <div className="max-w-7xl mx-auto p-6">
-        {/* Header with Glassmorphism */}
-        <div className={`text-center mb-8 p-6 rounded-3xl backdrop-blur-lg ${darkMode ? 'bg-gray-800/30 border border-gray-700/50' : 'bg-white/40 border border-white/50'} shadow-2xl`}>
-          <div className="flex items-center justify-center gap-4 mb-6">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl blur opacity-75 animate-pulse"></div>
-              <div className="relative p-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl">
-                <Palette className="w-10 h-10 text-white" />
-              </div>
-            </div>
-            <div>
-              <h1 className={`text-5xl font-black mb-2 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent animate-gradient`}>
-                ProColor Studio
-              </h1>
-              <p className={`text-lg ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Professional color palette generator with AI-powered algorithms
-              </p>
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="flex flex-wrap justify-center gap-3">
-            <button
-              onClick={animatedGeneration}
-              disabled={isGenerating}
-              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
-                isGenerating 
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl'
-              }`}
-            >
-              {isGenerating ? (
-                <>
-                  <RefreshCw className="w-4 h-4 inline mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Zap className="w-4 h-4 inline mr-2" />
-                  Generate Magic
-                </>
-              )}
-            </button>
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className={`px-4 py-3 rounded-xl transition-all duration-300 ${darkMode ? 'bg-yellow-400 text-gray-900 hover:bg-yellow-300' : 'bg-gray-800 text-white hover:bg-gray-700'}`}
-            >
-              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className={`px-4 py-3 rounded-xl transition-all duration-300 ${darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-white/80 text-gray-700 hover:bg-white'}`}
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Advanced Settings Panel */}
-        {showSettings && (
-          <div className={`mb-8 p-6 rounded-2xl backdrop-blur-lg ${darkMode ? 'bg-gray-800/50 border border-gray-700/50' : 'bg-white/60 border border-white/50'} shadow-xl transition-all duration-500`}>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div>
-                <label className={`block text-sm font-semibold mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>Color Format</label>
-                <select
-                  value={colorFormat}
-                  onChange={(e) => setColorFormat(e.target.value)}
-                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-purple-500`}
-                >
-                  <option value="hex">HEX</option>
-                  <option value="rgb">RGB</option>
-                  <option value="hsl">HSL</option>
-                </select>
-              </div>
-              <div>
-                <label className={`block text-sm font-semibold mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>Animation Speed</label>
-                <select
-                  value={animationSpeed}
-                  onChange={(e) => setAnimationSpeed(e.target.value)}
-                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-purple-500`}
-                >
-                  <option value="slow">Slow</option>
-                  <option value="normal">Normal</option>
-                  <option value="fast">Fast</option>
-                </select>
-              </div>
-              <div>
-                <label className={`block text-sm font-semibold mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>Preview Mode</label>
-                <select
-                  value={previewMode}
-                  onChange={(e) => setPreviewMode(e.target.value)}
-                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-purple-500`}
-                >
-                  {previewModes.map(mode => (
-                    <option key={mode.value} value={mode.value}>{mode.icon} {mode.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={`block text-sm font-semibold mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>Export Format</label>
-                <div className="flex gap-2">
-                  <button onClick={() => exportPalette('json')} className="flex-1 px-3 py-2 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600">JSON</button>
-                  <button onClick={() => exportPalette('css')} className="flex-1 px-3 py-2 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600">CSS</button>
-                  <button onClick={() => exportPalette('scss')} className="flex-1 px-3 py-2 text-xs bg-purple-500 text-white rounded-lg hover:bg-purple-600">SCSS</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Enhanced Controls */}
-        <div className={`mb-8 p-6 rounded-2xl backdrop-blur-lg ${darkMode ? 'bg-gray-800/50 border border-gray-700/50' : 'bg-white/60 border border-white/50'} shadow-xl`}>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Base Color */}
-            <div>
-              <label className={`block text-sm font-semibold mb-3 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
-                <Wand2 className="w-4 h-4 inline mr-2" />
-                Base Color
-              </label>
-              <div className="flex gap-3">
-                <div className="relative">
-                  <input
-                    type="color"
-                    value={baseColor}
-                    onChange={(e) => setBaseColor(e.target.value)}
-                    className="w-16 h-14 rounded-xl border-4 border-white shadow-lg cursor-pointer transform hover:scale-105 transition-transform"
-                  />
-                  <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl blur opacity-20"></div>
-                </div>
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    value={baseColor}
-                    onChange={(e) => setBaseColor(e.target.value)}
-                    className={`flex-1 px-4 py-3 border rounded-xl font-mono text-sm transition-all duration-200 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
-                    placeholder="#6366F1"
-                  />
-                </div>
-                <button
-                  onClick={() => setBaseColor(generateRandomColor())}
-                  className="px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl hover:from-indigo-600 hover:to-purple-600 transition-all duration-200 transform hover:scale-105"
-                >
-                  <Shuffle className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Palette Type */}
-            <div>
-              <label className={`block text-sm font-semibold mb-3 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
-                <Sparkles className="w-4 h-4 inline mr-2" />
-                Palette Algorithm
-              </label>
-              <div className="relative">
-                <select
-                  value={paletteType}
-                  onChange={(e) => setPaletteType(e.target.value)}
-                  className={`w-full px-4 py-3 rounded-xl border appearance-none ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200`}
-                >
-                  {paletteTypes.map(type => (
-                    <option key={type.value} value={type.value}>
-                      {type.icon} {type.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-              </div>
-              <p className={`text-xs mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                {paletteTypes.find(t => t.value === paletteType)?.description}
-              </p>
-            </div>
-
-            {/* Actions */}
-            <div>
-              <label className={`block text-sm font-semibold mb-3 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
-                <Heart className="w-4 h-4 inline mr-2" />
-                Quick Actions
-              </label>
-              <div className="flex gap-2">
-                <button
-                  onClick={savePalette}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all duration-200 transform hover:scale-105 ${darkMode ? 'bg-pink-600 hover:bg-pink-500 text-white' : 'bg-pink-500 hover:bg-pink-600 text-white'} shadow-lg hover:shadow-xl`}
-                >
-                  <Bookmark className="w-4 h-4" />
-                  Save
-                </button>
-                <button
-                  onClick={() => navigator.share?.({ title: 'Color Palette', text: currentPalette.join(', ') })}
-                  className={`px-4 py-3 rounded-xl transition-all duration-200 ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
-                >
-                  <Share2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Main Palette Display with Advanced Features */}
-        <div className={`mb-8 rounded-3xl overflow-hidden shadow-2xl backdrop-blur-lg ${darkMode ? 'bg-gray-800/50 border border-gray-700/50' : 'bg-white/60 border border-white/50'}`}>
-          <div className="grid grid-cols-5">
-            {currentPalette.map((color, index) => (
-              <div
-                key={index}
-                className="relative group aspect-square cursor-pointer transition-all duration-500 hover:z-10 hover:scale-110 hover:rotate-2"
-                style={{ backgroundColor: color }}
-                onClick={() => copyToClipboard(color)}
-                onDoubleClick={() => showColorDetails(color, index)}
-              >
-                {/* Gradient Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300"></div>
-                
-                {/* Lock Button */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleColorLock(index);
-                  }}
-                  className={`absolute top-3 right-3 p-2 rounded-lg backdrop-blur-sm transition-all duration-300 transform scale-0 group-hover:scale-100 ${
-                    lockedColors.has(index) 
-                      ? 'bg-yellow-400/90 text-gray-900' 
-                      : 'bg-white/20 text-white hover:bg-white/30'
-                  }`}
-                >
-                  {lockedColors.has(index) ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                </button>
-
-                {/* Main Action */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-                  <div className="text-center">
-                    <div className="p-4 rounded-full bg-white/20 backdrop-blur-sm mb-3 transform scale-75 group-hover:scale-100 transition-transform duration-300">
-                      {copiedColor === color ? (
-                        <Star className="w-8 h-8 text-white fill-current animate-pulse" />
-                      ) : (
-                        <Copy className="w-8 h-8 text-white" />
-                      )}
+        /* Dark mode styles */
+        .dark {
+            background: linear-gradient(135deg, #1f2937 0%, #111827 50%, #1f2937 100%);
+        }
+        
+        .dark .glassmorphism {
+            background: rgba(31, 41, 55, 0.3);
+            border-color: rgba(55, 65, 81, 0.5);
+        }
+        
+        .dark .text-gray-800 {
+            color: #f9fafb !important;
+        }
+        
+        .dark .text-gray-600 {
+            color: #d1d5db !important;
+        }
+        
+        .dark .text-gray-700 {
+            color: #e5e7eb !important;
+        }
+        
+        .dark .bg-white\/60 {
+            background: rgba(31, 41, 55, 0.5) !important;
+        }
+        
+        .dark .bg-white\/40 {
+            background: rgba(31, 41, 55, 0.3) !important;
+        }
+        
+        .dark .border-white\/50 {
+            border-color: rgba(55, 65, 81, 0.5) !important;
+        }
+        
+        .dark .bg-gray-50\/50 {
+            background: rgba(55, 65, 81, 0.5) !important;
+        }
+        
+        .dark .bg-white {
+            background: #374151 !important;
+        }
+        
+        .dark .border-gray-300 {
+            border-color: #4b5563 !important;
+        }
+        
+        .dark .border-gray-200\/20 {
+            border-color: rgba(75, 85, 99, 0.2) !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen transition-all duration-500 bg-gradient-to-br from-indigo-50 via-white to-purple-50">
+    <div class="max-w-7xl mx-auto p-6">
+        <!-- Header with Glassmorphism -->
+        <div class="text-center mb-8 p-6 rounded-3xl glassmorphism bg-white/40 border border-white/50 shadow-2xl">
+            <div class="flex items-center justify-center gap-4 mb-6">
+                <div class="relative">
+                    <div class="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl blur opacity-75 animate-pulse"></div>
+                    <div class="relative p-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl">
+                        <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5H9a2 2 0 00-2 2v12a4 4 0 004 4h6a2 2 0 002-2V7a2 2 0 00-2-2z"></path>
+                        </svg>
                     </div>
-                    <span className="text-white font-semibold text-sm drop-shadow-lg">
-                      {copiedColor === color ? 'Copied!' : 'Click to copy'}
-                    </span>
-                    <div className="text-xs text-white/80 mt-1">Double-click for details</div>
-                  </div>
                 </div>
+                <div>
+                    <h1 class="text-5xl font-black mb-2 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent animate-gradient">
+                        ProColor Studio
+                    </h1>
+                    <p class="text-lg text-gray-600">
+                        Professional color palette generator with AI-powered algorithms
+                    </p>
+                </div>
+            </div>
 
-                {/* Color Info Bar */}
-                <div className="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm text-white p-3 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                  <div className="font-mono text-sm font-bold">{formatColor(color)}</div>
-                  <div className="text-xs opacity-80">
-                    Contrast: {getContrastRatio(color, '#FFFFFF').toFixed(1)}:1
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+            <!-- Quick Actions -->
+            <div class="flex flex-wrap justify-center gap-3">
+                <button id="generateBtn" class="px-6 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl">
+                    <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                    Generate Magic
+                </button>
+                <button id="darkModeBtn" class="px-4 py-3 rounded-xl transition-all duration-300 bg-gray-800 text-white hover:bg-gray-700">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                    </svg>
+                </button>
+                <button id="settingsBtn" class="px-4 py-3 rounded-xl transition-all duration-300 bg-white/80 text-gray-700 hover:bg-white">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="m12 1 0 6m0 6 0 6m11-7-6 0m-6 0-6 0"></path>
+                    </svg>
+                </button>
+            </div>
         </div>
 
-        {/* Enhanced Preview Sections */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Dynamic Preview */}
-          <div className={`rounded-2xl overflow-hidden shadow-xl backdrop-blur-lg ${darkMode ? 'bg-gray-800/50 border border-gray-700/50' : 'bg-white/60 border border-white/50'}`}>
-            <div className="p-6 border-b border-gray-200/20">
-              <h3 className={`font-bold text-xl flex items-center gap-2 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                <Eye className="w-5 h-5" />
-                Live Preview - {previewModes.find(m => m.value === previewMode)?.label}
-              </h3>
-            </div>
-            <div className="p-6">
-              {previewMode === 'web' && (
-                <div className="space-y-4">
-                  <div 
-                    className="h-12 rounded-lg flex items-center px-6 text-white font-bold text-lg shadow-md"
-                    style={{ backgroundColor: currentPalette[0] }}
-                  >
-                    Navigation Header
-                  </div>
-                  <div 
-                    className="h-32 rounded-lg flex items-center justify-center text-white font-semibold shadow-md"
-                    style={{ backgroundColor: currentPalette[1] }}
-                  >
-                    Hero Section
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {currentPalette.slice(2).map((color, i) => (
-                      <div
-                        key={i}
-                        className="h-20 rounded-lg flex items-center justify-center text-white font-medium shadow-md"
-                        style={{ backgroundColor: color }}
-                      >
-                        Card {i + 1}
-                      </div>
-                    ))}
-                  </div>
+        <!-- Settings Panel -->
+        <div id="settingsPanel" class="hidden mb-8 p-6 rounded-2xl glassmorphism bg-white/60 border border-white/50 shadow-xl transition-all duration-500">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div>
+                    <label class="block text-sm font-semibold mb-2 text-gray-700">Color Format</label>
+                    <select id="colorFormat" class="w-full px-4 py-2 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500">
+                        <option value="hex">HEX</option>
+                        <option value="rgb">RGB</option>
+                        <option value="hsl">HSL</option>
+                    </select>
                 </div>
-              )}
-              
-              {previewMode === 'mobile' && (
-                <div className="max-w-sm mx-auto bg-gray-900 rounded-3xl p-2 shadow-2xl">
-                  <div className="bg-white rounded-2xl overflow-hidden">
-                    <div 
-                      className="h-16 flex items-center justify-between px-4 text-white"
-                      style={{ backgroundColor: currentPalette[0] }}
-                    >
-                      <div className="font-bold">App Name</div>
-                      <div className="w-6 h-6 bg-white/20 rounded-full"></div>
+                <div>
+                    <label class="block text-sm font-semibold mb-2 text-gray-700">Animation Speed</label>
+                    <select id="animationSpeed" class="w-full px-4 py-2 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500">
+                        <option value="slow">Slow</option>
+                        <option value="normal" selected>Normal</option>
+                        <option value="fast">Fast</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-2 text-gray-700">Preview Mode</label>
+                    <select id="previewMode" class="w-full px-4 py-2 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500">
+                        <option value="web">🌐 Website</option>
+                        <option value="mobile">📱 Mobile App</option>
+                        <option value="brand">🏢 Brand Identity</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-2 text-gray-700">Export Format</label>
+                    <div class="flex gap-2">
+                        <button onclick="exportPalette('json')" class="flex-1 px-3 py-2 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600">JSON</button>
+                        <button onclick="exportPalette('css')" class="flex-1 px-3 py-2 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600">CSS</button>
+                        <button onclick="exportPalette('scss')" class="flex-1 px-3 py-2 text-xs bg-purple-500 text-white rounded-lg hover:bg-purple-600">SCSS</button>
                     </div>
-                    <div className="p-4 space-y-3">
-                      {currentPalette.slice(1).map((color, i) => (
-                        <div
-                          key={i}
-                          className="h-12 rounded-xl flex items-center px-4 text-white font-medium"
-                          style={{ backgroundColor: color }}
-                        >
-                          Feature {i + 1}
+                </div>
+            </div>
+        </div>
+
+        <!-- Enhanced Controls -->
+        <div class="mb-8 p-6 rounded-2xl glassmorphism bg-white/60 border border-white/50 shadow-xl">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Base Color -->
+                <div>
+                    <label class="block text-sm font-semibold mb-3 text-gray-700">
+                        <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 11l3 3L22 4M5 21l14-14"></path>
+                        </svg>
+                        Base Color
+                    </label>
+                    <div class="flex gap-3">
+                        <div class="relative">
+                            <input type="color" id="baseColor" value="#6366F1" class="w-16 h-14 rounded-xl border-4 border-white shadow-lg cursor-pointer transform hover:scale-105 transition-transform">
+                            <div class="absolute -inset-1 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl blur opacity-20"></div>
                         </div>
-                      ))}
+                        <input type="text" id="baseColorText" value="#6366F1" class="flex-1 px-4 py-3 border rounded-xl font-mono text-sm transition-all duration-200 bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent" placeholder="#6366F1">
+                        <button id="randomColorBtn" class="px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl hover:from-indigo-600 hover:to-purple-600 transition-all duration-200 transform hover:scale-105">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v6a2 2 0 002 2h2m0-4h4m4 0h2a2 2 0 002-2V7a2 2 0 00-2-2h-2m0 4V5a2 2 0 00-2-2H12a2 2 0 00-2 2v4"></path>
+                            </svg>
+                        </button>
                     </div>
-                  </div>
                 </div>
-              )}
 
-              {previewMode === 'brand' && (
-                <div className="text-center space-y-6">
-                  <div 
-                    className="w-24 h-24 rounded-full mx-auto flex items-center justify-center text-white font-bold text-2xl shadow-lg"
-                    style={{ backgroundColor: currentPalette[0] }}
-                  >
-                    LOGO
-                  </div>
-                  <div className="flex justify-center space-x-4">
-                    {currentPalette.slice(1).map((color, i) => (
-                      <div
-                        key={i}
-                        className="w-16 h-16 rounded-lg shadow-md"
-                        style={{ backgroundColor: color }}
-                      ></div>
-                    ))}
-                  </div>
+                <!-- Palette Type -->
+                <div>
+                    <label class="block text-sm font-semibold mb-3 text-gray-700">
+                        <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                        </svg>
+                        Palette Algorithm
+                    </label>
+                    <div class="relative">
+                        <select id="paletteType" class="w-full px-4 py-3 rounded-xl border appearance-none bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200">
+                            <option value="complementary">🎯 Complementary</option>
+                            <option value="analogous">🌊 Analogous</option>
+                            <option value="triadic">🔺 Triadic</option>
+                            <option value="monochromatic">🎭 Monochromatic</option>
+                            <option value="tetradic">⬜ Tetradic</option>
+                            <option value="golden">✨ Golden Ratio</option>
+                            <option value="fibonacci">🌀 Fibonacci</option>
+                            <option value="nature">🌿 Nature</option>
+                            <option value="cyberpunk">🔮 Cyberpunk</option>
+                            <option value="pastel">🦄 Pastel</option>
+                        </select>
+                        <svg class="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <polyline points="6,9 12,15 18,9"></polyline>
+                        </svg>
+                    </div>
+                    <p class="text-xs mt-2 text-gray-500" id="paletteDescription">
+                        Opposite colors for maximum contrast
+                    </p>
                 </div>
-              )}
-            </div>
-          </div>
 
-          {/* Color Analysis */}
-          <div className={`rounded-2xl overflow-hidden shadow-xl backdrop-blur-lg ${darkMode ? 'bg-gray-800/50 border border-gray-700/50' : 'bg-white/60 border border-white/50'}`}>
-            <div className="p-6 border-b border-gray-200/20">
-              <h3 className={`font-bold text-xl flex items-center gap-2 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                <Info className="w-5 h-5" />
-                Palette Analysis
-              </h3>
+                <!-- Actions -->
+                <div>
+                    <label class="block text-sm font-semibold mb-3 text-gray-700">
+                        <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                        </svg>
+                        Quick Actions
+                    </label>
+                    <div class="flex gap-2">
+                        <button id="saveBtn" class="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all duration-200 transform hover:scale-105 bg-pink-500 hover:bg-pink-600 text-white shadow-lg hover:shadow-xl">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+                            </svg>
+                            Save
+                        </button>
+                        <button id="shareBtn" class="px-4 py-3 rounded-xl transition-all duration-200 bg-gray-100 hover:bg-gray-200 text-gray-700">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div className="p-6 space-y-4">
-              {currentPalette.map((color, i) => {
+        </div>
+
+        <!-- Main Palette Display -->
+        <div class="mb-8 rounded-3xl overflow-hidden shadow-2xl glassmorphism bg-white/60 border border-white/50">
+            <div class="grid grid-cols-5" id="paletteDisplay">
+                <!-- Color cards will be generated here -->
+            </div>
+        </div>
+
+        <!-- Preview Sections -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <!-- Live Preview -->
+            <div class="rounded-2xl overflow-hidden shadow-xl glassmorphism bg-white/60 border border-white/50">
+                <div class="p-6 border-b border-gray-200/20">
+                    <h3 class="font-bold text-xl flex items-center gap-2 text-gray-800">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                        Live Preview
+                    </h3>
+                </div>
+                <div class="p-6" id="previewContainer">
+                    <!-- Preview content will be generated here -->
+                </div>
+            </div>
+
+            <!-- Color Analysis -->
+            <div class="rounded-2xl overflow-hidden shadow-xl glassmorphism bg-white/60 border border-white/50">
+                <div class="p-6 border-b border-gray-200/20">
+                    <h3 class="font-bold text-xl flex items-center gap-2 text-gray-800">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                        </svg>
+                        Palette Analysis
+                    </h3>
+                </div>
+                <div class="p-6 space-y-4" id="analysisContainer">
+                    <!-- Analysis content will be generated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="fixed bottom-6 right-6 px-6 py-3 bg-green-500 text-white rounded-xl shadow-lg transform translate-y-full opacity-0 transition-all duration-300 z-50">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <span id="toastMessage">Color copied!</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Animation Elements -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden">
+        <div class="absolute top-1/4 left-1/4 w-2 h-2 bg-purple-400 rounded-full opacity-60 animate-ping floating-dot"></div>
+        <div class="absolute top-3/4 right-1/4 w-1 h-1 bg-pink-400 rounded-full opacity-40 animate-pulse floating-dot" style="animation-delay: 2s;"></div>
+        <div class="absolute bottom-1/4 left-1/3 w-1.5 h-1.5 bg-blue-400 rounded-full opacity-50 animate-bounce floating-dot" style="animation-delay: 4s;"></div>
+    </div>
+
+    <script>
+        // Global state
+        let currentPalette = [];
+        let lockedColors = new Set();
+        let savedPalettes = [];
+        let isDarkMode = false;
+        let showSettings = false;
+        let colorFormat = 'hex';
+        let animationSpeed = 'normal';
+        let previewMode = 'web';
+        let baseColor = '#6366F1';
+        let paletteType = 'complementary';
+
+        // Color conversion functions
+        function hexToHsl(hex) {
+            const r = parseInt(hex.slice(1, 3), 16) / 255;
+            const g = parseInt(hex.slice(3, 5), 16) / 255;
+            const b = parseInt(hex.slice(5, 7), 16) / 255;
+
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            let h, s, l = (max + min) / 2;
+
+            if (max === min) {
+                h = s = 0;
+            } else {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+
+            return [h * 360, s * 100, l * 100];
+        }
+
+        function hslToHex(h, s, l) {
+            h /= 360;
+            s /= 100;
+            l /= 100;
+
+            const hue2rgb = (p, q, t) => {
+                if (t < 0) t += 1;
+                if (t > 1) t -= 1;
+                if (t < 1/6) return p + (q - p) * 6 * t;
+                if (t < 1/2) return q;
+                if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                return p;
+            };
+
+            const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+            const p = 2 * l - q;
+            const r = hue2rgb(p, q, h + 1/3);
+            const g = hue2rgb(p, q, h);
+            const b = hue2rgb(p, q, h - 1/3);
+
+            const toHex = (c) => {
+                const hex = Math.round(c * 255).toString(16);
+                return hex.length === 1 ? '0' + hex : hex;
+            };
+
+            return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+        }
+
+        function hexToRgb(hex) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return [r, g, b];
+        }
+
+        function getContrastRatio(color1, color2) {
+            const getLuminance = (hex) => {
+                const [r, g, b] = hexToRgb(hex).map(c => {
+                    c = c / 255;
+                    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+                });
+                return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            };
+
+            const l1 = getLuminance(color1);
+            const l2 = getLuminance(color2);
+            return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+        }
+
+        function formatColor(hex) {
+            switch (colorFormat) {
+                case 'rgb':
+                    const [r, g, b] = hexToRgb(hex);
+                    return `rgb(${r}, ${g}, ${b})`;
+                case 'hsl':
+                    const [h, s, l] = hexToHsl(hex);
+                    return `hsl(${Math.round(h)}, ${Math.round(s)}%, ${Math.round(l)}%)`;
+                default:
+                    return hex.toUpperCase();
+            }
+        }
+
+        function generateRandomColor() {
+            const hue = Math.floor(Math.random() * 360);
+            const saturation = Math.floor(Math.random() * 60) + 40;
+            const lightness = Math.floor(Math.random() * 40) + 30;
+            return hslToHex(hue, saturation, lightness);
+        }
+
+        function generateAdvancedPalette(type, base, locked = new Set()) {
+            const [h, s, l] = hexToHsl(base);
+            const colors = [];
+
+            switch (type) {
+                case 'complementary':
+                    colors.push(base);
+                    colors.push(hslToHex((h + 180) % 360, Math.max(20, s - 10), Math.min(85, l + 5)));
+                    colors.push(hslToHex(h, Math.max(15, s - 25), Math.min(90, l + 25)));
+                    colors.push(hslToHex((h + 180) % 360, Math.max(15, s - 25), Math.min(90, l + 25)));
+                    colors.push(hslToHex(h, Math.max(10, s - 40), Math.max(15, l - 35)));
+                    break;
+
+                case 'analogous':
+                    const analogousShift = 25;
+                    colors.push(hslToHex((h - analogousShift * 2 + 360) % 360, Math.max(20, s - 5), Math.min(80, l + 10)));
+                    colors.push(hslToHex((h - analogousShift + 360) % 360, s, l));
+                    colors.push(base);
+                    colors.push(hslToHex((h + analogousShift) % 360, s, l));
+                    colors.push(hslToHex((h + analogousShift * 2) % 360, Math.max(20, s - 5), Math.min(80, l + 10)));
+                    break;
+
+                case 'triadic':
+                    colors.push(base);
+                    colors.push(hslToHex((h + 120) % 360, Math.max(25, s - 10), Math.min(85, l + 5)));
+                    colors.push(hslToHex((h + 240) % 360, Math.max(25, s - 10), Math.min(85, l + 5)));
+                    colors.push(hslToHex(h, Math.max(15, s - 30), Math.min(90, l + 20)));
+                    colors.push(hslToHex(h, Math.max(10, s - 15), Math.max(20, l - 25)));
+                    break;
+
+                case 'monochromatic':
+                    const baseLightness = l;
+                    colors.push(hslToHex(h, Math.max(20, s - 5), Math.min(95, baseLightness + 35)));
+                    colors.push(hslToHex(h, Math.max(15, s - 10), Math.min(90, baseLightness + 20)));
+                    colors.push(base);
+                    colors.push(hslToHex(h, Math.min(100, s + 5), Math.max(20, baseLightness - 20)));
+                    colors.push(hslToHex(h, Math.min(100, s + 10), Math.max(15, baseLightness - 35)));
+                    break;
+
+                case 'tetradic':
+                    colors.push(base);
+                    colors.push(hslToHex((h + 90) % 360, Math.max(25, s - 5), Math.min(85, l + 5)));
+                    colors.push(hslToHex((h + 180) % 360, Math.max(25, s - 5), Math.min(85, l + 5)));
+                    colors.push(hslToHex((h + 270) % 360, Math.max(25, s - 5), Math.min(85, l + 5)));
+                    colors.push(hslToHex(h, Math.max(10, s - 25), Math.max(25, l - 15)));
+                    break;
+
+                case 'golden':
+                    const goldenAngle = 137.5;
+                    colors.push(base);
+                    for (let i = 1; i < 5; i++) {
+                        const newHue = (h + goldenAngle * i) % 360;
+                        const newSat = Math.max(20, s - (i * 8));
+                        const newLight = Math.max(20, Math.min(85, l + (i % 2 === 0 ? 15 : -15)));
+                        colors.push(hslToHex(newHue, newSat, newLight));
+                    }
+                    break;
+
+                case 'fibonacci':
+                    const fibonacci = [1, 1, 2, 3, 5, 8, 13, 21];
+                    colors.push(base);
+                    fibonacci.slice(0, 4).forEach((fib, i) => {
+                        const hueShift = (fib * 15) % 360;
+                        const newHue = (h + hueShift) % 360;
+                        const newSat = Math.max(15, Math.min(100, s + (fib * 3) - 15));
+                        const newLight = Math.max(15, Math.min(85, l + (i % 2 === 0 ? 10 : -10)));
+                        colors.push(hslToHex(newHue, newSat, newLight));
+                    });
+                    break;
+
+                case 'nature':
+                    const naturePalettes = [
+                        [h, Math.max(30, s - 10), Math.min(75, l + 10)],
+                        [(h + 45) % 360, Math.max(40, s), Math.max(25, l - 20)],
+                        [(h + 120) % 360, Math.max(50, s + 10), Math.min(70, l)],
+                        [(h + 200) % 360, Math.max(35, s - 5), Math.min(80, l + 15)],
+                        [(h + 30) % 360, Math.max(20, s - 15), Math.max(20, l - 25)]
+                    ];
+                    naturePalettes.forEach(([hue, sat, light]) => {
+                        colors.push(hslToHex(hue, sat, light));
+                    });
+                    break;
+
+                case 'cyberpunk':
+                    colors.push(hslToHex(h, Math.min(100, s + 20), Math.min(85, l + 10)));
+                    colors.push(hslToHex((h + 180) % 360, Math.min(100, s + 30), Math.min(80, l + 5)));
+                    colors.push(hslToHex(300, 85, 65));
+                    colors.push(hslToHex(180, 90, 70));
+                    colors.push(hslToHex(h, Math.max(15, s - 30), Math.max(10, l - 40)));
+                    break;
+
+                case 'pastel':
+                    colors.push(hslToHex(h, Math.max(20, s - 40), Math.min(90, l + 25)));
+                    colors.push(hslToHex((h + 60) % 360, Math.max(25, s - 35), Math.min(88, l + 20)));
+                    colors.push(hslToHex((h + 120) % 360, Math.max(30, s - 30), Math.min(85, l + 15)));
+                    colors.push(hslToHex((h + 180) % 360, Math.max(25, s - 35), Math.min(88, l + 20)));
+                    colors.push(hslToHex((h + 240) % 360, Math.max(20, s - 40), Math.min(90, l + 25)));
+                    break;
+
+                default:
+                    colors.push(base);
+            }
+
+            // Apply locked colors
+            const result = [];
+            for (let i = 0; i < 5; i++) {
+                if (locked.has(i) && currentPalette[i]) {
+                    result[i] = currentPalette[i];
+                } else {
+                    result[i] = colors[i] || base;
+                }
+            }
+
+            return result;
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            toastMessage.textContent = message;
+            toast.classList.remove('translate-y-full', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-full', 'opacity-0');
+                toast.classList.remove('translate-y-0', 'opacity-100');
+            }, 3000);
+        }
+
+        async function copyToClipboard(color) {
+            try {
+                const formattedColor = formatColor(color);
+                await navigator.clipboard.writeText(formattedColor);
+                showToast(`Copied ${formattedColor}!`);
+            } catch (err) {
+                console.error('Failed to copy color:', err);
+                showToast('Failed to copy color');
+            }
+        }
+
+        function toggleColorLock(index) {
+            if (lockedColors.has(index)) {
+                lockedColors.delete(index);
+            } else {
+                lockedColors.add(index);
+            }
+            renderPalette();
+        }
+
+        function renderPalette() {
+            const paletteDisplay = document.getElementById('paletteDisplay');
+            paletteDisplay.innerHTML = '';
+
+            currentPalette.forEach((color, index) => {
+                const colorCard = document.createElement('div');
+                colorCard.className = 'relative group aspect-square cursor-pointer color-card';
+                colorCard.style.backgroundColor = color;
+                
+                colorCard.innerHTML = `
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300"></div>
+                    
+                    <button class="absolute top-3 right-3 p-2 rounded-lg backdrop-blur-sm transition-all duration-300 transform scale-0 group-hover:scale-100 ${
+                        lockedColors.has(index) 
+                            ? 'bg-yellow-400/90 text-gray-900' 
+                            : 'bg-white/20 text-white hover:bg-white/30'
+                    }" onclick="toggleColorLock(${index})">
+                        ${lockedColors.has(index) 
+                            ? '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>'
+                            : '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>'
+                        }
+                    </button>
+
+                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300" onclick="copyToClipboard('${color}')">
+                        <div class="text-center">
+                            <div class="p-4 rounded-full bg-white/20 backdrop-blur-sm mb-3 transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                            </div>
+                            <span class="text-white font-semibold text-sm drop-shadow-lg">
+                                Click to copy
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm text-white p-3 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+                        <div class="font-mono text-sm font-bold">${formatColor(color)}</div>
+                        <div class="text-xs opacity-80">
+                            Contrast: ${getContrastRatio(color, '#FFFFFF').toFixed(1)}:1
+                        </div>
+                    </div>
+                `;
+
+                paletteDisplay.appendChild(colorCard);
+            });
+
+            renderPreview();
+            renderAnalysis();
+        }
+
+        function renderPreview() {
+            const previewContainer = document.getElementById('previewContainer');
+            
+            if (previewMode === 'web') {
+                previewContainer.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="h-12 rounded-lg flex items-center px-6 text-white font-bold text-lg shadow-md" style="background-color: ${currentPalette[0]}">
+                            Navigation Header
+                        </div>
+                        <div class="h-32 rounded-lg flex items-center justify-center text-white font-semibold shadow-md" style="background-color: ${currentPalette[1]}">
+                            Hero Section
+                        </div>
+                        <div class="grid grid-cols-3 gap-3">
+                            ${currentPalette.slice(2).map((color, i) => `
+                                <div class="h-20 rounded-lg flex items-center justify-center text-white font-medium shadow-md" style="background-color: ${color}">
+                                    Card ${i + 1}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            } else if (previewMode === 'mobile') {
+                previewContainer.innerHTML = `
+                    <div class="max-w-sm mx-auto bg-gray-900 rounded-3xl p-2 shadow-2xl">
+                        <div class="bg-white rounded-2xl overflow-hidden">
+                            <div class="h-16 flex items-center justify-between px-4 text-white" style="background-color: ${currentPalette[0]}">
+                                <div class="font-bold">App Name</div>
+                                <div class="w-6 h-6 bg-white/20 rounded-full"></div>
+                            </div>
+                            <div class="p-4 space-y-3">
+                                ${currentPalette.slice(1).map((color, i) => `
+                                    <div class="h-12 rounded-xl flex items-center px-4 text-white font-medium" style="background-color: ${color}">
+                                        Feature ${i + 1}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (previewMode === 'brand') {
+                previewContainer.innerHTML = `
+                    <div class="text-center space-y-6">
+                        <div class="w-24 h-24 rounded-full mx-auto flex items-center justify-center text-white font-bold text-2xl shadow-lg" style="background-color: ${currentPalette[0]}">
+                            LOGO
+                        </div>
+                        <div class="flex justify-center space-x-4">
+                            ${currentPalette.slice(1).map(color => `
+                                <div class="w-16 h-16 rounded-lg shadow-md" style="background-color: ${color}"></div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function renderAnalysis() {
+            const analysisContainer = document.getElementById('analysisContainer');
+            
+            analysisContainer.innerHTML = currentPalette.map((color, i) => {
                 const [h, s, l] = hexToHsl(color);
                 const contrastWhite = getContrastRatio(color, '#FFFFFF');
                 const contrastBlack = getContrastRatio(color, '#000000');
                 
-                return (
-                  <div key={i} className="flex items-center gap-4 p-3 rounded-xl bg-gray-50/50 dark:bg-gray-700/50">
-                    <div 
-                      className="w-12 h-12 rounded-lg shadow-md border-2 border-white"
-                      style={{ backgroundColor: color }}
-                    ></div>
-                    <div className="flex-1">
-                      <div className={`font-mono font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                        {formatColor(color)}
-                      </div>
-                      <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                        HSL: {Math.round(h)}°, {Math.round(s)}%, {Math.round(l)}%
-                      </div>
-                      <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        Contrast: {contrastWhite.toFixed(1)}:1 (white) | {contrastBlack.toFixed(1)}:1 (black)
-                      </div>
-                    </div>
-                    {lockedColors.has(i) && (
-                      <Lock className="w-4 h-4 text-yellow-500" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Saved Palettes & History */}
-        {(savedPalettes.length > 0 || paletteHistory.length > 0) && (
-          <div className={`rounded-2xl overflow-hidden shadow-xl backdrop-blur-lg ${darkMode ? 'bg-gray-800/50 border border-gray-700/50' : 'bg-white/60 border border-white/50'}`}>
-            <div className="p-6 border-b border-gray-200/20">
-              <h3 className={`font-bold text-xl flex items-center gap-2 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                <Bookmark className="w-5 h-5" />
-                Saved Palettes & History
-              </h3>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[...savedPalettes, ...paletteHistory.map((colors, i) => ({ 
-                  id: `history-${i}`, 
-                  colors, 
-                  name: `Recent ${i + 1}`,
-                  timestamp: new Date().toISOString()
-                }))].slice(0, 12).map((palette) => (
-                  <div
-                    key={palette.id}
-                    className={`p-4 rounded-xl cursor-pointer transition-all duration-300 hover:scale-105 ${darkMode ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-50/50 hover:bg-gray-100'}`}
-                    onClick={() => {
-                      setCurrentPalette(palette.colors);
-                      if (palette.colors[0]) setBaseColor(palette.colors[0]);
-                    }}
-                  >
-                    <div className="flex gap-1 mb-3">
-                      {palette.colors.slice(0, 5).map((color, i) => (
-                        <div
-                          key={i}
-                          className="flex-1 h-8 rounded-md first:rounded-l-lg last:rounded-r-lg"
-                          style={{ backgroundColor: color }}
-                        ></div>
-                      ))}
-                    </div>
-                    <div className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                      {palette.name}
-                    </div>
-                    <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {new Date(palette.timestamp).toLocaleDateString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Color Details Modal */}
-        {showColorInfo && currentColorInfo && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setShowColorInfo(false)}>
-            <div 
-              className={`max-w-md w-full rounded-2xl shadow-2xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-6">
-                <div className="flex items-center gap-4 mb-6">
-                  <div 
-                    className="w-20 h-20 rounded-2xl shadow-lg border-4 border-white"
-                    style={{ backgroundColor: currentColorInfo.hex }}
-                  ></div>
-                  <div>
-                    <h3 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                      Color Details
-                    </h3>
-                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                      Position {currentColorInfo.index + 1}
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className={`block text-sm font-semibold mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>HEX</label>
-                    <div className={`font-mono text-lg p-3 rounded-lg ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-800'}`}>
-                      {currentColorInfo.hex.toUpperCase()}
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={`block text-sm font-semibold mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>RGB</label>
-                      <div className={`font-mono p-3 rounded-lg ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-800'}`}>
-                        {currentColorInfo.rgb.join(', ')}
-                      </div>
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-semibold mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>HSL</label>
-                      <div className={`font-mono p-3 rounded-lg ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-800'}`}>
-                        {currentColorInfo.hsl.join(', ')}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className={`block text-sm font-semibold mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>Accessibility</label>
-                    <div className="space-y-2">
-                      <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                        <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>vs White</div>
-                        <div className={`font-bold ${currentColorInfo.contrastWhite >= 4.5 ? 'text-green-500' : 'text-red-500'}`}>
-                          {currentColorInfo.contrastWhite}:1 {currentColorInfo.contrastWhite >= 4.5 ? '✓ WCAG AA' : '✗ Poor contrast'}
+                return `
+                    <div class="flex items-center gap-4 p-3 rounded-xl bg-gray-50/50">
+                        <div class="w-12 h-12 rounded-lg shadow-md border-2 border-white" style="background-color: ${color}"></div>
+                        <div class="flex-1">
+                            <div class="font-mono font-bold text-gray-800">
+                                ${formatColor(color)}
+                            </div>
+                            <div class="text-sm text-gray-600">
+                                HSL: ${Math.round(h)}°, ${Math.round(s)}%, ${Math.round(l)}%
+                            </div>
+                            <div class="text-xs text-gray-500">
+                                Contrast: ${contrastWhite.toFixed(1)}:1 (white) | ${contrastBlack.toFixed(1)}:1 (black)
+                            </div>
                         </div>
-                      </div>
-                      <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                        <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>vs Black</div>
-                        <div className={`font-bold ${currentColorInfo.contrastBlack >= 4.5 ? 'text-green-500' : 'text-red-500'}`}>
-                          {currentColorInfo.contrastBlack}:1 {currentColorInfo.contrastBlack >= 4.5 ? '✓ WCAG AA' : '✗ Poor contrast'}
-                        </div>
-                      </div>
+                        ${lockedColors.has(i) ? `
+                            <svg class="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                        ` : ''}
                     </div>
-                  </div>
-                </div>
-                
-                <div className="flex gap-3 mt-6">
-                  <button
-                    onClick={() => copyToClipboard(currentColorInfo.hex)}
-                    className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all duration-200 font-semibold"
-                  >
-                    <Copy className="w-4 h-4 inline mr-2" />
-                    Copy HEX
-                  </button>
-                  <button
-                    onClick={() => setShowColorInfo(false)}
-                    className={`px-4 py-3 rounded-xl transition-all duration-200 ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      {/* Floating Animation Elements */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-purple-400 rounded-full opacity-60 animate-ping"></div>
-        <div className="absolute top-3/4 right-1/4 w-1 h-1 bg-pink-400 rounded-full opacity-40 animate-pulse"></div>
-        <div className="absolute bottom-1/4 left-1/3 w-1.5 h-1.5 bg-blue-400 rounded-full opacity-50 animate-bounce"></div>
-      </div>
-    </div>
-  );
-};
+                `;
+            }).join('');
+        }
 
-export default ColorPaletteGenerator;
+        function animatedGeneration() {
+            const generateBtn = document.getElementById('generateBtn');
+            generateBtn.disabled = true;
+            generateBtn.innerHTML = `
+                <svg class="w-4 h-4 inline mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Generating...
+            `;
+
+            let count = 0;
+            const maxCount = animationSpeed === 'fast' ? 5 : animationSpeed === 'slow' ? 15 : 10;
+            const interval = animationSpeed === 'fast' ? 50 : animationSpeed === 'slow' ? 200 : 100;
+            
+            const animationInterval = setInterval(() => {
+                if (count < maxCount) {
+                    currentPalette = generateAdvancedPalette(paletteType, generateRandomColor(), lockedColors);
+                    renderPalette();
+                    count++;
+                } else {
+                    clearInterval(animationInterval);
+                    currentPalette = generateAdvancedPalette(paletteType, baseColor, lockedColors);
+                    renderPalette();
+                    
+                    generateBtn.disabled = false;
+                    generateBtn.innerHTML = `
+                        <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                        </svg>
+                        Generate Magic
+                    `;
+                }
+            }, interval);
+        }
+
+        function exportPalette(format) {
+            const paletteData = {
+                type: paletteType,
+                baseColor,
+                colors: currentPalette.map(color => ({
+                    hex: color,
+                    rgb: formatColor(color).replace('rgb(', '').replace(')', ''),
+                    hsl: (() => {
+                        const [h, s, l] = hexToHsl(color);
+                        return `${Math.round(h)}, ${Math.round(s)}%, ${Math.round(l)}%`;
+                    })()
+                })),
+                accessibility: currentPalette.map(color => ({
+                    color,
+                    contrastWithWhite: getContrastRatio(color, '#FFFFFF').toFixed(2),
+                    contrastWithBlack: getContrastRatio(color, '#000000').toFixed(2)
+                })),
+                timestamp: new Date().toISOString()
+            };
+            
+            let content, filename, mimeType;
+            
+            switch (format) {
+                case 'css':
+                    content = `:root {\n${currentPalette.map((color, i) => `  --color-${i + 1}: ${color};`).join('\n')}\n}`;
+                    filename = `palette-${paletteType}-${Date.now()}.css`;
+                    mimeType = 'text/css';
+                    break;
+                case 'scss':
+                    content = currentPalette.map((color, i) => `$color-${i + 1}: ${color};`).join('\n');
+                    filename = `palette-${paletteType}-${Date.now()}.scss`;
+                    mimeType = 'text/scss';
+                    break;
+                default:
+                    content = JSON.stringify(paletteData, null, 2);
+                    filename = `palette-${paletteType}-${Date.now()}.json`;
+                    mimeType = 'application/json';
+            }
+            
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showToast(`Exported as ${format.toUpperCase()}!`);
+        }
+
+        function updatePaletteDescription() {
+            const descriptions = {
+                'complementary': 'Opposite colors for maximum contrast',
+                'analogous': 'Neighboring colors for harmony',
+                'triadic': 'Three evenly spaced colors',
+                'monochromatic': 'Single hue with variations',
+                'tetradic': 'Four colors in perfect balance',
+                'golden': 'Mathematically perfect harmony',
+                'fibonacci': 'Nature-inspired proportions',
+                'nature': 'Earth tones and organic colors',
+                'cyberpunk': 'Neon and high-tech vibes',
+                'pastel': 'Soft and delicate tones'
+            };
+            
+            document.getElementById('paletteDescription').textContent = descriptions[paletteType];
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize palette
+            currentPalette = generateAdvancedPalette(paletteType, baseColor, lockedColors);
+            renderPalette();
+
+            // Generate button
+            document.getElementById('generateBtn').addEventListener('click', animatedGeneration);
+
+            // Dark mode toggle
+            document.getElementById('darkModeBtn').addEventListener('click', function() {
+                isDarkMode = !isDarkMode;
+                document.body.classList.toggle('dark');
+                
+                if (isDarkMode) {
+                    document.body.className = 'min-h-screen transition-all duration-500 bg-gray-900 dark';
+                    this.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>';
+                    this.className = 'px-4 py-3 rounded-xl transition-all duration-300 bg-yellow-400 text-gray-900 hover:bg-yellow-300';
+                } else {
+                    document.body.className = 'min-h-screen transition-all duration-500 bg-gradient-to-br from-indigo-50 via-white to-purple-50';
+                    this.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>';
+                    this.className = 'px-4 py-3 rounded-xl transition-all duration-300 bg-gray-800 text-white hover:bg-gray-700';
+                }
+            });
+
+            // Settings toggle
+            document.getElementById('settingsBtn').addEventListener('click', function() {
+                showSettings = !showSettings;
+                const settingsPanel = document.getElementById('settingsPanel');
+                if (showSettings) {
+                    settingsPanel.classList.remove('hidden');
+                } else {
+                    settingsPanel.classList.add('hidden');
+                }
+            });
+
+            // Base color inputs
+            document.getElementById('baseColor').addEventListener('change', function(e) {
+                baseColor = e.target.value;
+                document.getElementById('baseColorText').value = baseColor;
+                currentPalette = generateAdvancedPalette(paletteType, baseColor, lockedColors);
+                renderPalette();
+            });
+
+            document.getElementById('baseColorText').addEventListener('change', function(e) {
+                if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
+                    baseColor = e.target.value;
+                    document.getElementById('baseColor').value = baseColor;
+                    currentPalette = generateAdvancedPalette(paletteType, baseColor, lockedColors);
+                    renderPalette();
+                }
+            });
+
+            // Random color button
+            document.getElementById('randomColorBtn').addEventListener('click', function() {
+                baseColor = generateRandomColor();
+                document.getElementById('baseColor').value = baseColor;
+                document.getElementById('baseColorText').value = baseColor;
+                currentPalette = generateAdvancedPalette(paletteType, baseColor, lockedColors);
+                renderPalette();
+            });
+
+            // Palette type selector
+            document.getElementById('paletteType').addEventListener('change', function(e) {
+                paletteType = e.target.value;
+                updatePaletteDescription();
+                currentPalette = generateAdvancedPalette(paletteType, baseColor, lockedColors);
+                renderPalette();
+            });
+
+            // Settings controls
+            document.getElementById('colorFormat').addEventListener('change', function(e) {
+                colorFormat = e.target.value;
+                renderPalette();
+            });
+
+            document.getElementById('animationSpeed').addEventListener('change', function(e) {
+                animationSpeed = e.target.value;
+            });
+
+            document.getElementById('previewMode').addEventListener('change', function(e) {
+                previewMode = e.target.value;
+                renderPreview();
+            });
+
+            // Save button
+            document.getElementById('saveBtn').addEventListener('click', function() {
+                const newPalette = {
+                    id: Date.now(),
+                    colors: [...currentPalette],
+                    type: paletteType,
+                    baseColor,
+                    timestamp: new Date().toISOString(),
+                    name: `${paletteType} palette`
+                };
+                savedPalettes.unshift(newPalette);
+                savedPalettes = savedPalettes.slice(0, 20);
+                showToast('Palette saved!');
+            });
+
+            // Share button
+            document.getElementById('shareBtn').addEventListener('click', function() {
+                if (navigator.share) {
+                    navigator.share({
+                        title: 'Color Palette',
+                        text: currentPalette.join(', '),
+                        url: window.location.href
+                    });
+                } else {
+                    copyToClipboard(currentPalette.join(', '));
+                }
+            });
+        });
+    </script>
+</body>
+</html>
